@@ -1,7 +1,11 @@
 package bcastkv
 
 import (
+	"bufio"
 	"bytes"
+	"encoding/binary"
+	"errors"
+	"fmt"
 	"hash/crc32"
 	"os"
 )
@@ -19,22 +23,22 @@ func (fp *fileWrapper) storeData(key string, value []byte, expire int32) (vpos i
 
 	buff := new(bytes.Buffer)
 
-	key := []byte(key)
+	keydata := []byte(key)
 	binary.Write(buff, binary.BigEndian, expire)
 	binary.Write(buff, binary.BigEndian, int32(len(key)))
 	binary.Write(buff, binary.BigEndian, int32(len(value)))
-	buff.Write(key)
+	buff.Write(keydata)
 	buff.Write(value)
 
 	crc := crc32.ChecksumIEEE(buff.Bytes())
 
-	vpos = int32(fp.current_pos + RecordHeaderSize + int32(len(key)))
+	vpos = int32(fp.current_pos + RecordHeaderSize + int32(len(keydata)))
 	buff2 := new(bytes.Buffer)
 	binary.Write(buff2, binary.BigEndian, crc)
 	buff2.Write(buff.Bytes())
 
-	var sz int
-	sz, err = fp.file.Write(buff2.Bytes())
+	var size int
+	size, err = fp.file.Write(buff2.Bytes())
 	vsize = int32(len(value))
 	fp.current_pos += int32(size)
 	return vpos, vsize, err
@@ -44,7 +48,7 @@ func (fp *fileWrapper) readHeader() (crc, tstamp, klen, vlen, vpos int32, key []
 	/* crc + tstamp + len key data + len value */
 	var headerbuff []byte = make([]byte, RecordHeaderSize)
 	var sz int
-	sz, err = fp.file.Read(buff)
+	sz, err = fp.file.Read(headerbuff)
 
 	if err != nil {
 		return
@@ -72,8 +76,8 @@ func (fp *fileWrapper) readHeader() (crc, tstamp, klen, vlen, vpos int32, key []
 		return
 	}
 
-	f.file.Seek(int64(vlen), 1)
-	vpos = f.cpos + RecordHeaderSize + klen
+	fp.file.Seek(int64(vlen), 1)
+	vpos = fp.current_pos + RecordHeaderSize + klen
 	fp.current_pos += int32(RecordHeaderSize + klen + vlen)
 	return
 }

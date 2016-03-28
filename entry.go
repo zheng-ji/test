@@ -1,5 +1,10 @@
 package bcastkv
 
+import (
+	"errors"
+	"fmt"
+)
+
 type Entry struct {
 	fp     *fileWrapper
 	vsize  int32

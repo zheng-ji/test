@@ -5,7 +5,7 @@ type Hash struct {
 }
 
 func newHash() *Hash {
-	h := new(hash)
+	h := new(Hash)
 	h.keys = make(map[string]*Entry)
 	return h
 }

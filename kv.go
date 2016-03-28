@@ -1,5 +1,12 @@
 package bcastkv
 
+import (
+	"encoding/json"
+	"io"
+	"os"
+	"time"
+)
+
 type BcastKv struct {
 	filename string
 	activefp *fileWrapper
@@ -22,7 +29,7 @@ func (kv *BcastKv) init() (err error) {
 		return err
 	}
 	kv.activefp = NewfileWrapper(activeFile)
-	//err = kv.populateKeyDir()
+	err = kv.fill()
 	return err
 }
 
@@ -33,7 +40,6 @@ func (kv *BcastKv) Close() {
 	}
 }
 
-// isReady checks if Rkv is open and ready.
 func (kv *BcastKv) isReady() {
 	if kv.keyhash == nil {
 		panic("kv: hashkey is invalid")
@@ -77,10 +83,47 @@ func (kv *BcastKv) Put(key string, value interface{}) error {
 	return kv.keyhash.writeTo(kv.activefp, key, bytes, 0)
 }
 
-func (kv *Bcastkv) Exist(key string) bool {
+func (kv *BcastKv) Exist(key string) bool {
 	kv.isReady()
 	if e := kv.keyhash.keys[key]; e == nil {
 		return false
 	}
 	return true
+}
+
+func (kv *BcastKv) fill() (ret error) {
+	hash := kv.keyhash
+	kv.activefp.file.Seek(0, 0) /* place the cursor in the begin of the file */
+	seconds := time.Now().Unix()
+	today := int32(seconds / 86400)
+
+	for {
+		_, tstamp, _, vsz, vpos, keydata, err := kv.activefp.readHeader()
+
+		if err != nil && err != io.EOF {
+			ret = err
+			break
+		} else if err == io.EOF {
+			break
+		}
+
+		key := string(keydata)
+		e := new(Entry)
+		e.vpos = vpos
+		e.vsize = vsz
+		e.tstamp = 0
+		e.fp = kv.activefp
+
+		if vsz == 0 { // this is deleted value
+			delete(hash.keys, key)
+		} else if tstamp != 0 && tstamp < today { // this value has expired
+			delete(hash.keys, key)
+		} else {
+			hash.keys[key] = e
+		}
+		if err == io.EOF {
+			break
+		}
+	}
+	return ret
 }
