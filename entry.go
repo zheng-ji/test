@@ -12,12 +12,12 @@ type Entry struct {
 	tstamp int64
 }
 
-func (e *Entry) readValue() (value []byte, err error) {
-	value = make([]byte, e.vsize)
+func (entry *Entry) readValue() (value []byte, err error) {
+	value = make([]byte, entry.vsize)
 	var length int
-	length, err = e.fp.file.ReadAt(value, int64(e.vpos))
-	if int32(length) != e.vsize {
-		err = errors.New(fmt.Sprintf("Expected %d bytes got %d", e.vsize, length))
+	length, err = entry.fp.file.ReadAt(value, int64(entry.vpos))
+	if int32(length) != entry.vsize {
+		err = errors.New(fmt.Sprintf("Expected %d bytes got %d", entry.vsize, length))
 	}
 	return
 }

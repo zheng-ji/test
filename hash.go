@@ -4,13 +4,13 @@ type Hash struct {
 	keys map[string]*Entry
 }
 
-func newHash() *Hash {
+func NewHash() *Hash {
 	h := new(Hash)
 	h.keys = make(map[string]*Entry)
 	return h
 }
 
-func (h *Hash) writeTo(f *fileWrapper, key string, value []byte, expire int32) error {
+func (h *Hash) insert(f *fileWrapper, key string, value []byte, expire int32) error {
 	entry := new(Entry)
 	var err error
 
@@ -18,7 +18,7 @@ func (h *Hash) writeTo(f *fileWrapper, key string, value []byte, expire int32) e
 		panic("file is nil")
 	}
 
-	entry.vpos, entry.vsize, err = f.storeData(key, value, expire)
+	entry.vpos, entry.vsize, err = f.saveData(key, value, expire)
 
 	entry.fp = f
 	entry.tstamp = 0

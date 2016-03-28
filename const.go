@@ -9,6 +9,6 @@ const (
 )
 
 var (
-	ErrBlankKey    = errors.New("rkv: key can not be blank")
-	ErrKeyNotFound = errors.New("rkv: key not found")
+	ErrBlankKey    = errors.New("blank key not allowed")
+	ErrKeyNotFound = errors.New("key not found")
 )

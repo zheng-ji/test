@@ -19,7 +19,7 @@ func NewfileWrapper(f *os.File) *fileWrapper {
 	return &fileWrapper{f, 0}
 }
 
-func (fp *fileWrapper) storeData(key string, value []byte, expire int32) (vpos int32, vsize int32, err error) {
+func (fp *fileWrapper) saveData(key string, value []byte, expire int32) (vpos int32, vsize int32, err error) {
 
 	buff := new(bytes.Buffer)
 
@@ -33,6 +33,7 @@ func (fp *fileWrapper) storeData(key string, value []byte, expire int32) (vpos i
 	crc := crc32.ChecksumIEEE(buff.Bytes())
 
 	vpos = int32(fp.current_pos + RecordHeaderSize + int32(len(keydata)))
+
 	buff2 := new(bytes.Buffer)
 	binary.Write(buff2, binary.BigEndian, crc)
 	buff2.Write(buff.Bytes())

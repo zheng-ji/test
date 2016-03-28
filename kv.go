@@ -23,34 +23,34 @@ func NewBcastKv(filename string) (kv *BcastKv, err error) {
 // open KV store.
 func (kv *BcastKv) init() (err error) {
 	var activeFile *os.File
-	kv.keyhash = newHash()
+	kv.keyhash = NewHash()
 	activeFile, err = os.OpenFile(kv.filename, os.O_CREATE|os.O_APPEND|os.O_RDWR, 0766)
 	if err != nil {
 		return err
 	}
 	kv.activefp = NewfileWrapper(activeFile)
-	err = kv.fill()
+	err = kv.load2hash()
 	return err
 }
 
 func (kv *BcastKv) Close() {
-	kv.isReady()
+	kv.isInit()
 	if kv.activefp != nil {
 		kv.activefp.file.Close()
 	}
 }
 
-func (kv *BcastKv) isReady() {
+func (kv *BcastKv) isInit() {
 	if kv.keyhash == nil {
-		panic("kv: hashkey is invalid")
+		panic("hashkey is invalid")
 	}
 	if kv.activefp == nil {
-		panic("kv: active is not defined")
+		panic("activefile is not defined")
 	}
 }
 
 func (kv *BcastKv) Get(key string, value interface{}) error {
-	kv.isReady()
+	kv.isInit()
 	e := kv.keyhash.keys[key]
 	if e == nil {
 		return ErrKeyNotFound
@@ -65,13 +65,13 @@ func (kv *BcastKv) Get(key string, value interface{}) error {
 }
 
 func (kv *BcastKv) Delete(key string) error {
-	kv.isReady()
+	kv.isInit()
 	bytes := []byte{}
-	return kv.keyhash.writeTo(kv.activefp, key, bytes, 0)
+	return kv.keyhash.insert(kv.activefp, key, bytes, 0)
 }
 
 func (kv *BcastKv) Put(key string, value interface{}) error {
-	kv.isReady()
+	kv.isInit()
 	if key == "" {
 		return ErrBlankKey
 	}
@@ -80,18 +80,18 @@ func (kv *BcastKv) Put(key string, value interface{}) error {
 	if err != nil {
 		return err
 	}
-	return kv.keyhash.writeTo(kv.activefp, key, bytes, 0)
+	return kv.keyhash.insert(kv.activefp, key, bytes, 0)
 }
 
 func (kv *BcastKv) Exist(key string) bool {
-	kv.isReady()
+	kv.isInit()
 	if e := kv.keyhash.keys[key]; e == nil {
 		return false
 	}
 	return true
 }
 
-func (kv *BcastKv) fill() (ret error) {
+func (kv *BcastKv) load2hash() (ret error) {
 	hash := kv.keyhash
 	kv.activefp.file.Seek(0, 0) /* place the cursor in the begin of the file */
 	seconds := time.Now().Unix()
@@ -108,18 +108,18 @@ func (kv *BcastKv) fill() (ret error) {
 		}
 
 		key := string(keydata)
-		e := new(Entry)
-		e.vpos = vpos
-		e.vsize = vsz
-		e.tstamp = 0
-		e.fp = kv.activefp
+		entry := new(Entry)
+		entry.vpos = vpos
+		entry.vsize = vsz
+		entry.tstamp = 0
+		entry.fp = kv.activefp
 
 		if vsz == 0 { // this is deleted value
 			delete(hash.keys, key)
 		} else if tstamp != 0 && tstamp < today { // this value has expired
 			delete(hash.keys, key)
 		} else {
-			hash.keys[key] = e
+			hash.keys[key] = entry
 		}
 		if err == io.EOF {
 			break
