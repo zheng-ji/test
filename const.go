@@ -6,6 +6,7 @@ import (
 
 const (
 	RecordHeaderSize int32 = 16
+	CompactRate            = 0.8
 )
 
 var (

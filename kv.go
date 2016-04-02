@@ -3,19 +3,22 @@ package bcastkv
 import (
 	"encoding/json"
 	"io"
+	"math/rand"
 	"os"
 	"time"
 )
 
 type BcastKv struct {
-	filename string
-	activefp *fileWrapper
-	keyhash  *Hash
+	filename   string
+	activefp   *fileWrapper
+	keyhash    *Hash
+	activeRate float64
 }
 
 func NewBcastKv(filename string) (kv *BcastKv, err error) {
 	kv = new(BcastKv)
 	kv.filename = filename
+	kv.activeRate = 1
 	err = kv.init()
 	return kv, err
 }
@@ -30,6 +33,7 @@ func (kv *BcastKv) init() (err error) {
 	}
 	kv.activefp = NewfileWrapper(activeFile)
 	err = kv.load2hash()
+	go kv.scheduler()
 	return err
 }
 
@@ -96,6 +100,7 @@ func (kv *BcastKv) load2hash() (ret error) {
 	kv.activefp.file.Seek(0, 0) /* place the cursor in the begin of the file */
 	seconds := time.Now().Unix()
 	today := int32(seconds / 86400)
+	cnt := 0
 
 	for {
 		_, tstamp, _, vsz, vpos, keydata, err := kv.activefp.readHeader()
@@ -121,9 +126,56 @@ func (kv *BcastKv) load2hash() (ret error) {
 		} else {
 			hash.keys[key] = entry
 		}
+		cnt += 1
 		if err == io.EOF {
 			break
 		}
 	}
+	if cnt > 0 {
+		kv.activeRate = float64(len(hash.keys)) / float64(cnt)
+	} else {
+		kv.activeRate = 1
+	}
 	return ret
+}
+
+func (kv *BcastKv) scheduler() {
+	rand.Seed(time.Now().UnixNano())
+	t := time.Tick(time.Duration(3) * time.Second)
+	for _ = range t {
+		if kv.activeRate < CompactRate {
+			kv.Compact()
+		}
+	}
+}
+
+func (kv *BcastKv) Compact() error {
+	temp := kv.filename + "~"
+	compact, err := NewBcastKv(temp)
+	if err != nil {
+		return err
+	}
+
+	kv.init()
+	for key, entry := range kv.keyhash.keys {
+		val, err := entry.readValue()
+		if err != nil {
+			return err
+		}
+		if err = kv.keyhash.insert(kv.activefp, key, val, 0); err != nil {
+			return err
+		}
+	}
+	kv.Close()
+	compact.Close()
+
+	// move temp file and replace kv.filename
+	if err = os.Remove(kv.filename); err != nil {
+		return err
+	}
+	if err = os.Rename(temp, kv.filename); err != nil {
+		return err
+	}
+	err = kv.init() // reopen database
+	return err
 }
